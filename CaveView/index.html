@@ -1,29 +1,28 @@
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-gb" lang="en-gb" dir="ltr">
+<html>
 <head>
-	<title>demo 3d cave viewer</title>
+	<title>Haritun</title>
 	<meta http-equiv="content-type" content="text/html; charset=utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link type="text/css" href="css/caveview.css" rel="stylesheet"/>
-	<meta name="Description" content="CaveView - 3d Cave model viewer">
 </head>
 <body onload="onload();" >
 <script type="text/javascript" src="js/CaveView2.js" ></script>
 
 <script type="text/javascript" >
 
-function onload () {
+	function onload () {
 
-	const viewer = new CV2.CaveViewer( "scene", {
-		surveyDirectory: "surveys/",
-		home: "CaveView/",
-	} );
+		const viewer = new CV2.CaveViewer( "scene", {
+			surveyDirectory: "surveys/",
+			home: "CaveView/",
+		} );
 
-	const ui = new CV2.CaveViewUI(viewer);
+		const ui = new CV2.CaveViewUI(viewer);
 
-	ui.loadCave('haritun.lox');
+		ui.loadCave('haritun.lox');
 
-}
+	}
 
 </script>
 <style>
@@ -48,7 +47,7 @@ function onload () {
 	}
 </style>
 <div class="main">
-<!--	<div class="title">cave</div>-->
+	<div class="title">Haritun : חריטון</div>
 	<div id="scene"></div>
 </div>
 </body>
