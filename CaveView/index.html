@@ -32,14 +32,19 @@
 	}
 	.main {
 		height: 100%;
-		/*padding: 10px;*/
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 	}
 	.title {
 		padding: 10px;
-		font-family: sans-serif;;
+		font-family: sans-serif;
+		position: absolute;
+		background: #3a3a3a;
+		color: #d9d9d9;
+		right: 5px;
+		top: 10px;
+		border-radius: 5px;
 	}
 	#scene {
 		flex-grow: 1;
@@ -47,8 +52,8 @@
 	}
 </style>
 <div class="main">
-	<div class="title">Haritun : חריטון</div>
 	<div id="scene"></div>
+	<div class="title">Haritun : חריטון</div>
 </div>
 </body>
 </html>
