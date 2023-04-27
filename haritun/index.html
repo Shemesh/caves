@@ -16,7 +16,9 @@
 <script src="./threejs/three.min.js"></script>
 <script src="./threejs/OrbitControls.js"></script>
 <script src="./threejs/ViewHelper.js"></script>
+<script src="./tweenjs/tween.js"></script>
 <script src="./Qgis2threejs.js"></script>
+<script src="./threejs/loaders/GLTFLoader.js"></script>
 </head>
 <body>
 <div id="view">
@@ -125,7 +127,8 @@
 <script>
 Q3D.Config.allVisible = true;
 Q3D.Config.coord.visible = false;
-Q3D.Config.viewpoint = {lookAt:{x:3922380.250014453,y:3694391.750000537,z:549.5350036621094},pos:{x:3922620.0394284683,y:3694271.553272602,z:950.3540565733417}};
+Q3D.Config.animation.enabled = true;
+Q3D.Config.animation.startOnLoad = true;
 Q3D.Config.northArrow.enabled = true;
 Q3D.Config.northArrow.color = 0x666666;
 
