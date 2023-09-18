@@ -3351,7 +3351,7 @@ Q3D.VectorLayer.prototype.buildLabels = function (features, getPointsFunc) {
 
       // render label text
       ctx.font = font;
-      tw = ctx.measureText(text).width + 2;
+      tw = ctx.measureText(text).width + 40;
       cw = THREE.Math.ceilPowerOfTwo(tw);
       x = cw / 2;
       y = ch / 2;
