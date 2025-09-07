@@ -36,6 +36,10 @@
 
 				return value;
 
+			case Uint32Array:
+
+				return value / 4294967295.0;
+
 			case Uint16Array:
 
 				return value / 65535.0;
@@ -43,6 +47,10 @@
 			case Uint8Array:
 
 				return value / 255.0;
+
+			case Int32Array:
+
+				return Math.max( value / 2147483647.0, - 1.0 );
 
 			case Int16Array:
 
@@ -68,6 +76,10 @@
 
 				return value;
 
+			case Uint32Array:
+
+				return Math.round( value * 4294967295.0 );
+
 			case Uint16Array:
 
 				return Math.round( value * 65535.0 );
@@ -75,6 +87,10 @@
 			case Uint8Array:
 
 				return Math.round( value * 255.0 );
+
+			case Int32Array:
+
+				return Math.round( value * 2147483647.0 );
 
 			case Int16Array:
 
@@ -290,7 +306,7 @@
 
 		}
 
-		setFromEuler( euler, update ) {
+		setFromEuler( euler, update = true ) {
 
 			const x = euler._x, y = euler._y, z = euler._z, order = euler._order;
 
@@ -358,7 +374,7 @@
 
 			}
 
-			if ( update !== false ) this._onChangeCallback();
+			if ( update === true ) this._onChangeCallback();
 
 			return this;
 
@@ -653,8 +669,7 @@
 				this._y = s * y + t * this._y;
 				this._z = s * z + t * this._z;
 
-				this.normalize();
-				this._onChangeCallback();
+				this.normalize(); // normalize calls _onChangeCallback()
 
 				return this;
 
@@ -684,23 +699,24 @@
 
 		random() {
 
-			// Derived from http://planning.cs.uiuc.edu/node198.html
-			// Note, this source uses w, x, y, z ordering,
-			// so we swap the order below.
+			// sets this quaternion to a uniform random unit quaternnion
 
-			const u1 = Math.random();
-			const sqrt1u1 = Math.sqrt( 1 - u1 );
-			const sqrtu1 = Math.sqrt( u1 );
+			// Ken Shoemake
+			// Uniform random rotations
+			// D. Kirk, editor, Graphics Gems III, pages 124-132. Academic Press, New York, 1992.
 
-			const u2 = 2 * Math.PI * Math.random();
+			const theta1 = 2 * Math.PI * Math.random();
+			const theta2 = 2 * Math.PI * Math.random();
 
-			const u3 = 2 * Math.PI * Math.random();
+			const x0 = Math.random();
+			const r1 = Math.sqrt( 1 - x0 );
+			const r2 = Math.sqrt( x0 );
 
 			return this.set(
-				sqrt1u1 * Math.cos( u2 ),
-				sqrtu1 * Math.sin( u3 ),
-				sqrtu1 * Math.cos( u3 ),
-				sqrt1u1 * Math.sin( u2 ),
+				r1 * Math.sin( theta1 ),
+				r1 * Math.cos( theta1 ),
+				r2 * Math.sin( theta2 ),
+				r2 * Math.cos( theta2 ),
 			);
 
 		}
@@ -742,7 +758,15 @@
 			this._z = attribute.getZ( index );
 			this._w = attribute.getW( index );
 
+			this._onChangeCallback();
+
 			return this;
+
+		}
+
+		toJSON() {
+
+			return this.toArray();
 
 		}
 
@@ -1017,21 +1041,20 @@
 
 		applyQuaternion( q ) {
 
-			const x = this.x, y = this.y, z = this.z;
+			// quaternion q is assumed to have unit length
+
+			const vx = this.x, vy = this.y, vz = this.z;
 			const qx = q.x, qy = q.y, qz = q.z, qw = q.w;
 
-			// calculate quat * vector
+			// t = 2 * cross( q.xyz, v );
+			const tx = 2 * ( qy * vz - qz * vy );
+			const ty = 2 * ( qz * vx - qx * vz );
+			const tz = 2 * ( qx * vy - qy * vx );
 
-			const ix = qw * x + qy * z - qz * y;
-			const iy = qw * y + qz * x - qx * z;
-			const iz = qw * z + qx * y - qy * x;
-			const iw = - qx * x - qy * y - qz * z;
-
-			// calculate result * inverse quat
-
-			this.x = ix * qw + iw * - qx + iy * - qz - iz * - qy;
-			this.y = iy * qw + iw * - qy + iz * - qx - ix * - qz;
-			this.z = iz * qw + iw * - qz + ix * - qy - iy * - qx;
+			// v + q.w * t + cross( q.xyz, t );
+			this.x = vx + qw * tx + qy * tz - qz * ty;
+			this.y = vy + qw * ty + qz * tx - qx * tz;
+			this.z = vz + qw * tz + qx * ty - qy * tx;
 
 			return this;
 
@@ -1163,9 +1186,9 @@
 
 		roundToZero() {
 
-			this.x = ( this.x < 0 ) ? Math.ceil( this.x ) : Math.floor( this.x );
-			this.y = ( this.y < 0 ) ? Math.ceil( this.y ) : Math.floor( this.y );
-			this.z = ( this.z < 0 ) ? Math.ceil( this.z ) : Math.floor( this.z );
+			this.x = Math.trunc( this.x );
+			this.y = Math.trunc( this.y );
+			this.z = Math.trunc( this.z );
 
 			return this;
 
@@ -1403,6 +1426,16 @@
 
 		}
 
+		setFromColor( c ) {
+
+			this.x = c.r;
+			this.y = c.g;
+			this.z = c.b;
+
+			return this;
+
+		}
+
 		equals( v ) {
 
 			return ( ( v.x === this.x ) && ( v.y === this.y ) && ( v.z === this.z ) );
@@ -1451,15 +1484,15 @@
 
 		randomDirection() {
 
-			// Derived from https://mathworld.wolfram.com/SpherePointPicking.html
+			// https://mathworld.wolfram.com/SpherePointPicking.html
 
-			const u = ( Math.random() - 0.5 ) * 2;
-			const t = Math.random() * Math.PI * 2;
-			const f = Math.sqrt( 1 - u ** 2 );
+			const theta = Math.random() * Math.PI * 2;
+			const u = Math.random() * 2 - 1;
+			const c = Math.sqrt( 1 - u * u );
 
-			this.x = f * Math.cos( t );
-			this.y = f * Math.sin( t );
-			this.z = u;
+			this.x = c * Math.cos( theta );
+			this.y = u;
+			this.z = c * Math.sin( theta );
 
 			return this;
 
@@ -1771,8 +1804,8 @@
 
 		roundToZero() {
 
-			this.x = ( this.x < 0 ) ? Math.ceil( this.x ) : Math.floor( this.x );
-			this.y = ( this.y < 0 ) ? Math.ceil( this.y ) : Math.floor( this.y );
+			this.x = Math.trunc( this.x );
+			this.y = Math.trunc( this.y );
 
 			return this;
 
@@ -1830,6 +1863,20 @@
 			const angle = Math.atan2( - this.y, - this.x ) + Math.PI;
 
 			return angle;
+
+		}
+
+		angleTo( v ) {
+
+			const denominator = Math.sqrt( this.lengthSq() * v.lengthSq() );
+
+			if ( denominator === 0 ) return Math.PI / 2;
+
+			const theta = this.dot( v ) / denominator;
+
+			// clamp, to handle numerical problems
+
+			return Math.acos( clamp( theta, - 1, 1 ) );
 
 		}
 
@@ -1963,32 +2010,13 @@
 
 		setFromArray( array ) {
 
-			let minX = + Infinity;
-			let minY = + Infinity;
-			let minZ = + Infinity;
+			this.makeEmpty();
 
-			let maxX = - Infinity;
-			let maxY = - Infinity;
-			let maxZ = - Infinity;
+			for ( let i = 0, il = array.length; i < il; i += 3 ) {
 
-			for ( let i = 0, l = array.length; i < l; i += 3 ) {
-
-				const x = array[ i ];
-				const y = array[ i + 1 ];
-				const z = array[ i + 2 ];
-
-				if ( x < minX ) minX = x;
-				if ( y < minY ) minY = y;
-				if ( z < minZ ) minZ = z;
-
-				if ( x > maxX ) maxX = x;
-				if ( y > maxY ) maxY = y;
-				if ( z > maxZ ) maxZ = z;
+				this.expandByPoint( _vector$2.fromArray( array, i ) );
 
 			}
-
-			this.min.set( minX, minY, minZ );
-			this.max.set( maxX, maxY, maxZ );
 
 			return this;
 
@@ -1996,32 +2024,13 @@
 
 		setFromBufferAttribute( attribute ) {
 
-			let minX = + Infinity;
-			let minY = + Infinity;
-			let minZ = + Infinity;
+			this.makeEmpty();
 
-			let maxX = - Infinity;
-			let maxY = - Infinity;
-			let maxZ = - Infinity;
+			for ( let i = 0, il = attribute.count; i < il; i ++ ) {
 
-			for ( let i = 0, l = attribute.count; i < l; i ++ ) {
-
-				const x = attribute.getX( i );
-				const y = attribute.getY( i );
-				const z = attribute.getZ( i );
-
-				if ( x < minX ) minX = x;
-				if ( y < minY ) minY = y;
-				if ( z < minZ ) minZ = z;
-
-				if ( x > maxX ) maxX = x;
-				if ( y > maxY ) maxY = y;
-				if ( z > maxZ ) maxZ = z;
+				this.expandByPoint( _vector$2.fromBufferAttribute( attribute, i ) );
 
 			}
-
-			this.min.set( minX, minY, minZ );
-			this.max.set( maxX, maxY, maxZ );
 
 			return this;
 
@@ -2142,25 +2151,59 @@
 
 			if ( geometry !== undefined ) {
 
-				if ( precise && geometry.attributes != undefined && geometry.attributes.position !== undefined ) {
+				const positionAttribute = geometry.getAttribute( 'position' );
 
-					const position = geometry.attributes.position;
-					for ( let i = 0, l = position.count; i < l; i ++ ) {
+				// precise AABB computation based on vertex data requires at least a position attribute.
+				// instancing isn't supported so far and uses the normal (conservative) code path.
 
-						_vector$2.fromBufferAttribute( position, i ).applyMatrix4( object.matrixWorld );
+				if ( precise === true && positionAttribute !== undefined && object.isInstancedMesh !== true ) {
+
+					for ( let i = 0, l = positionAttribute.count; i < l; i ++ ) {
+
+						if ( object.isMesh === true ) {
+
+							object.getVertexPosition( i, _vector$2 );
+
+						} else {
+
+							_vector$2.fromBufferAttribute( positionAttribute, i );
+
+						}
+
+						_vector$2.applyMatrix4( object.matrixWorld );
 						this.expandByPoint( _vector$2 );
 
 					}
 
 				} else {
 
-					if ( geometry.boundingBox === null ) {
+					if ( object.boundingBox !== undefined ) {
 
-						geometry.computeBoundingBox();
+						// object-level bounding box
+
+						if ( object.boundingBox === null ) {
+
+							object.computeBoundingBox();
+
+						}
+
+						_box$2.copy( object.boundingBox );
+
+
+					} else {
+
+						// geometry-level bounding box
+
+						if ( geometry.boundingBox === null ) {
+
+							geometry.computeBoundingBox();
+
+						}
+
+						_box$2.copy( geometry.boundingBox );
 
 					}
 
-					_box$2.copy( geometry.boundingBox );
 					_box$2.applyMatrix4( object.matrixWorld );
 
 					this.union( _box$2 );
@@ -2183,9 +2226,9 @@
 
 		containsPoint( point ) {
 
-			return point.x < this.min.x || point.x > this.max.x ||
-				point.y < this.min.y || point.y > this.max.y ||
-				point.z < this.min.z || point.z > this.max.z ? false : true;
+			return point.x >= this.min.x && point.x <= this.max.x &&
+				point.y >= this.min.y && point.y <= this.max.y &&
+				point.z >= this.min.z && point.z <= this.max.z;
 
 		}
 
@@ -2213,9 +2256,9 @@
 		intersectsBox( box ) {
 
 			// using 6 splitting planes to rule out intersections.
-			return box.max.x < this.min.x || box.min.x > this.max.x ||
-				box.max.y < this.min.y || box.min.y > this.max.y ||
-				box.max.z < this.min.z || box.min.z > this.max.z ? false : true;
+			return box.max.x >= this.min.x && box.min.x <= this.max.x &&
+				box.max.y >= this.min.y && box.min.y <= this.max.y &&
+				box.max.z >= this.min.z && box.min.z <= this.max.z;
 
 		}
 
@@ -2561,7 +2604,12 @@
 
 	}
 
+	const FloatType = 1015;
+
 	const StaticDrawUsage = 35044;
+
+	const WebGLCoordinateSystem = 2000;
+	const WebGPUCoordinateSystem = 2001;
 
 	const _vector$1 = /*@__PURE__*/ new Vector3();
 	const _vector2 = /*@__PURE__*/ new Vector2();
@@ -2586,7 +2634,8 @@
 			this.normalized = normalized;
 
 			this.usage = StaticDrawUsage;
-			this.updateRange = { offset: 0, count: - 1 };
+			this.updateRanges = [];
+			this.gpuType = FloatType;
 
 			this.version = 0;
 
@@ -2608,6 +2657,18 @@
 
 		}
 
+		addUpdateRange( start, count ) {
+
+			this.updateRanges.push( { start, count } );
+
+		}
+
+		clearUpdateRanges() {
+
+			this.updateRanges.length = 0;
+
+		}
+
 		copy( source ) {
 
 			this.name = source.name;
@@ -2617,6 +2678,7 @@
 			this.normalized = source.normalized;
 
 			this.usage = source.usage;
+			this.gpuType = source.gpuType;
 
 			return this;
 
@@ -2727,6 +2789,26 @@
 
 			// Matching BufferAttribute constructor, do not normalize the array.
 			this.array.set( value, offset );
+
+			return this;
+
+		}
+
+		getComponent( index, component ) {
+
+			let value = this.array[ index * this.itemSize + component ];
+
+			if ( this.normalized ) value = denormalize( value, this.array );
+
+			return value;
+
+		}
+
+		setComponent( index, component, value ) {
+
+			if ( this.normalized ) value = normalize( value, this.array );
+
+			this.array[ index * this.itemSize + component ] = value;
 
 			return this;
 
@@ -2897,35 +2979,8 @@
 
 			if ( this.name !== '' ) data.name = this.name;
 			if ( this.usage !== StaticDrawUsage ) data.usage = this.usage;
-			if ( this.updateRange.offset !== 0 || this.updateRange.count !== - 1 ) data.updateRange = this.updateRange;
 
 			return data;
-
-		}
-
-		// @deprecated
-
-		copyColorsArray() {
-
-			console.error( 'THREE.BufferAttribute: copyColorsArray() was removed in r144.' );
-
-		}
-
-		copyVector2sArray() {
-
-			console.error( 'THREE.BufferAttribute: copyVector2sArray() was removed in r144.' );
-
-		}
-
-		copyVector3sArray() {
-
-			console.error( 'THREE.BufferAttribute: copyVector3sArray() was removed in r144.' );
-
-		}
-
-		copyVector4sArray() {
-
-			console.error( 'THREE.BufferAttribute: copyVector4sArray() was removed in r144.' );
 
 		}
 
@@ -2969,6 +3024,8 @@
 	class Sphere {
 
 		constructor( center = new Vector3(), radius = - 1 ) {
+
+			this.isSphere = true;
 
 			this.center = center;
 			this.radius = radius;
@@ -3203,7 +3260,7 @@
 
 	class Matrix4 {
 
-		constructor() {
+		constructor( n11, n12, n13, n14, n21, n22, n23, n24, n31, n32, n33, n34, n41, n42, n43, n44 ) {
 
 			Matrix4.prototype.isMatrix4 = true;
 
@@ -3215,6 +3272,12 @@
 				0, 0, 0, 1
 
 			];
+
+			if ( n11 !== undefined ) {
+
+				this.set( n11, n12, n13, n14, n21, n22, n23, n24, n31, n32, n33, n34, n41, n42, n43, n44 );
+
+			}
 
 		}
 
@@ -3755,14 +3818,29 @@
 
 		makeTranslation( x, y, z ) {
 
-			this.set(
+			if ( x.isVector3 ) {
 
-				1, 0, 0, x,
-				0, 1, 0, y,
-				0, 0, 1, z,
-				0, 0, 0, 1
+				this.set(
 
-			);
+					1, 0, 0, x.x,
+					0, 1, 0, x.y,
+					0, 0, 1, x.z,
+					0, 0, 0, 1
+
+				);
+
+			} else {
+
+				this.set(
+
+					1, 0, 0, x,
+					0, 1, 0, y,
+					0, 0, 1, z,
+					0, 0, 0, 1
+
+				);
+
+			}
 
 			return this;
 
@@ -3953,7 +4031,7 @@
 
 		}
 
-		makePerspective( left, right, top, bottom, near, far ) {
+		makePerspective( left, right, top, bottom, near, far, coordinateSystem = WebGLCoordinateSystem ) {
 
 			const te = this.elements;
 			const x = 2 * near / ( right - left );
@@ -3961,19 +4039,35 @@
 
 			const a = ( right + left ) / ( right - left );
 			const b = ( top + bottom ) / ( top - bottom );
-			const c = - ( far + near ) / ( far - near );
-			const d = - 2 * far * near / ( far - near );
 
-			te[ 0 ] = x;	te[ 4 ] = 0;	te[ 8 ] = a;	te[ 12 ] = 0;
-			te[ 1 ] = 0;	te[ 5 ] = y;	te[ 9 ] = b;	te[ 13 ] = 0;
-			te[ 2 ] = 0;	te[ 6 ] = 0;	te[ 10 ] = c;	te[ 14 ] = d;
+			let c, d;
+
+			if ( coordinateSystem === WebGLCoordinateSystem ) {
+
+				c = - ( far + near ) / ( far - near );
+				d = ( - 2 * far * near ) / ( far - near );
+
+			} else if ( coordinateSystem === WebGPUCoordinateSystem ) {
+
+				c = - far / ( far - near );
+				d = ( - far * near ) / ( far - near );
+
+			} else {
+
+				throw new Error( 'THREE.Matrix4.makePerspective(): Invalid coordinate system: ' + coordinateSystem );
+
+			}
+
+			te[ 0 ] = x;	te[ 4 ] = 0;	te[ 8 ] = a; 	te[ 12 ] = 0;
+			te[ 1 ] = 0;	te[ 5 ] = y;	te[ 9 ] = b; 	te[ 13 ] = 0;
+			te[ 2 ] = 0;	te[ 6 ] = 0;	te[ 10 ] = c; 	te[ 14 ] = d;
 			te[ 3 ] = 0;	te[ 7 ] = 0;	te[ 11 ] = - 1;	te[ 15 ] = 0;
 
 			return this;
 
 		}
 
-		makeOrthographic( left, right, top, bottom, near, far ) {
+		makeOrthographic( left, right, top, bottom, near, far, coordinateSystem = WebGLCoordinateSystem ) {
 
 			const te = this.elements;
 			const w = 1.0 / ( right - left );
@@ -3982,12 +4076,29 @@
 
 			const x = ( right + left ) * w;
 			const y = ( top + bottom ) * h;
-			const z = ( far + near ) * p;
 
-			te[ 0 ] = 2 * w;	te[ 4 ] = 0;	te[ 8 ] = 0;	te[ 12 ] = - x;
-			te[ 1 ] = 0;	te[ 5 ] = 2 * h;	te[ 9 ] = 0;	te[ 13 ] = - y;
-			te[ 2 ] = 0;	te[ 6 ] = 0;	te[ 10 ] = - 2 * p;	te[ 14 ] = - z;
-			te[ 3 ] = 0;	te[ 7 ] = 0;	te[ 11 ] = 0;	te[ 15 ] = 1;
+			let z, zInv;
+
+			if ( coordinateSystem === WebGLCoordinateSystem ) {
+
+				z = ( far + near ) * p;
+				zInv = - 2 * p;
+
+			} else if ( coordinateSystem === WebGPUCoordinateSystem ) {
+
+				z = near * p;
+				zInv = - 1 * p;
+
+			} else {
+
+				throw new Error( 'THREE.Matrix4.makeOrthographic(): Invalid coordinate system: ' + coordinateSystem );
+
+			}
+
+			te[ 0 ] = 2 * w;	te[ 4 ] = 0;		te[ 8 ] = 0; 		te[ 12 ] = - x;
+			te[ 1 ] = 0; 		te[ 5 ] = 2 * h;	te[ 9 ] = 0; 		te[ 13 ] = - y;
+			te[ 2 ] = 0; 		te[ 6 ] = 0;		te[ 10 ] = zInv;	te[ 14 ] = - z;
+			te[ 3 ] = 0; 		te[ 7 ] = 0;		te[ 11 ] = 0;		te[ 15 ] = 1;
 
 			return this;
 
@@ -4428,7 +4539,7 @@
 
 	class Matrix3 {
 
-		constructor() {
+		constructor( n11, n12, n13, n21, n22, n23, n31, n32, n33 ) {
 
 			Matrix3.prototype.isMatrix3 = true;
 
@@ -4439,6 +4550,12 @@
 				0, 0, 1
 
 			];
+
+			if ( n11 !== undefined ) {
+
+				this.set( n11, n12, n13, n21, n22, n23, n31, n32, n33 );
+
+			}
 
 		}
 
@@ -4689,13 +4806,27 @@
 
 		makeTranslation( x, y ) {
 
-			this.set(
+			if ( x.isVector2 ) {
 
-				1, 0, x,
-				0, 1, y,
-				0, 0, 1
+				this.set(
 
-			);
+					1, 0, x.x,
+					0, 1, x.y,
+					0, 0, 1
+
+				);
+
+			} else {
+
+				this.set(
+
+					1, 0, x,
+					0, 1, y,
+					0, 0, 1
+
+				);
+
+			}
 
 			return this;
 
@@ -4811,6 +4942,9 @@
 	const _addedEvent = { type: 'added' };
 	const _removedEvent = { type: 'removed' };
 
+	const _childaddedEvent = { type: 'childadded', child: null };
+	const _childremovedEvent = { type: 'childremoved', child: null };
+
 	class Object3D extends EventDispatcher {
 
 		constructor() {
@@ -4884,9 +5018,9 @@
 			this.matrixWorld = new Matrix4();
 
 			this.matrixAutoUpdate = Object3D.DEFAULT_MATRIX_AUTO_UPDATE;
-			this.matrixWorldNeedsUpdate = false;
 
 			this.matrixWorldAutoUpdate = Object3D.DEFAULT_MATRIX_WORLD_AUTO_UPDATE; // checked by the renderer
+			this.matrixWorldNeedsUpdate = false;
 
 			this.layers = new Layers();
 			this.visible = true;
@@ -4902,6 +5036,10 @@
 			this.userData = {};
 
 		}
+
+		onBeforeShadow( /* renderer, object, camera, shadowCamera, geometry, depthMaterial, group */ ) {}
+
+		onAfterShadow( /* renderer, object, camera, shadowCamera, geometry, depthMaterial, group */ ) {}
 
 		onBeforeRender( /* renderer, scene, camera, geometry, material, group */ ) {}
 
@@ -5112,16 +5250,15 @@
 
 			if ( object && object.isObject3D ) {
 
-				if ( object.parent !== null ) {
-
-					object.parent.remove( object );
-
-				}
-
+				object.removeFromParent();
 				object.parent = this;
 				this.children.push( object );
 
 				object.dispatchEvent( _addedEvent );
+
+				_childaddedEvent.child = object;
+				this.dispatchEvent( _childaddedEvent );
+				_childaddedEvent.child = null;
 
 			} else {
 
@@ -5156,6 +5293,10 @@
 
 				object.dispatchEvent( _removedEvent );
 
+				_childremovedEvent.child = object;
+				this.dispatchEvent( _childremovedEvent );
+				_childremovedEvent.child = null;
+
 			}
 
 			return this;
@@ -5178,20 +5319,7 @@
 
 		clear() {
 
-			for ( let i = 0; i < this.children.length; i ++ ) {
-
-				const object = this.children[ i ];
-
-				object.parent = null;
-
-				object.dispatchEvent( _removedEvent );
-
-			}
-
-			this.children.length = 0;
-
-			return this;
-
+			return this.remove( ... this.children );
 
 		}
 
@@ -5215,9 +5343,17 @@
 
 			object.applyMatrix4( _m1$1 );
 
-			this.add( object );
+			object.removeFromParent();
+			object.parent = this;
+			this.children.push( object );
 
 			object.updateWorldMatrix( false, true );
+
+			object.dispatchEvent( _addedEvent );
+
+			_childaddedEvent.child = object;
+			this.dispatchEvent( _childaddedEvent );
+			_childaddedEvent.child = null;
 
 			return this;
 
@@ -5256,21 +5392,15 @@
 
 		}
 
-		getObjectsByProperty( name, value ) {
-
-			let result = [];
+		getObjectsByProperty( name, value, result = [] ) {
 
 			if ( this[ name ] === value ) result.push( this );
 
-			for ( let i = 0, l = this.children.length; i < l; i ++ ) {
+			const children = this.children;
 
-				const childResult = this.children[ i ].getObjectsByProperty( name, value );
+			for ( let i = 0, l = children.length; i < l; i ++ ) {
 
-				if ( childResult.length > 0 ) {
-
-					result = result.concat( childResult );
-
-				}
+				children[ i ].getObjectsByProperty( name, value, result );
 
 			}
 
@@ -5376,6 +5506,54 @@
 
 			if ( this.matrixWorldNeedsUpdate || force ) {
 
+				if ( this.matrixWorldAutoUpdate === true ) {
+
+					if ( this.parent === null ) {
+
+						this.matrixWorld.copy( this.matrix );
+
+					} else {
+
+						this.matrixWorld.multiplyMatrices( this.parent.matrixWorld, this.matrix );
+
+					}
+
+				}
+
+				this.matrixWorldNeedsUpdate = false;
+
+				force = true;
+
+			}
+
+			// make sure descendants are updated if required
+
+			const children = this.children;
+
+			for ( let i = 0, l = children.length; i < l; i ++ ) {
+
+				const child = children[ i ];
+
+				child.updateMatrixWorld( force );
+
+			}
+
+		}
+
+		updateWorldMatrix( updateParents, updateChildren ) {
+
+			const parent = this.parent;
+
+			if ( updateParents === true && parent !== null ) {
+
+				parent.updateWorldMatrix( true, false );
+
+			}
+
+			if ( this.matrixAutoUpdate ) this.updateMatrix();
+
+			if ( this.matrixWorldAutoUpdate === true ) {
+
 				if ( this.parent === null ) {
 
 					this.matrixWorld.copy( this.matrix );
@@ -5386,53 +5564,9 @@
 
 				}
 
-				this.matrixWorldNeedsUpdate = false;
-
-				force = true;
-
 			}
 
-			// update children
-
-			const children = this.children;
-
-			for ( let i = 0, l = children.length; i < l; i ++ ) {
-
-				const child = children[ i ];
-
-				if ( child.matrixWorldAutoUpdate === true || force === true ) {
-
-					child.updateMatrixWorld( force );
-
-				}
-
-			}
-
-		}
-
-		updateWorldMatrix( updateParents, updateChildren ) {
-
-			const parent = this.parent;
-
-			if ( updateParents === true && parent !== null && parent.matrixWorldAutoUpdate === true ) {
-
-				parent.updateWorldMatrix( true, false );
-
-			}
-
-			if ( this.matrixAutoUpdate ) this.updateMatrix();
-
-			if ( this.parent === null ) {
-
-				this.matrixWorld.copy( this.matrix );
-
-			} else {
-
-				this.matrixWorld.multiplyMatrices( this.parent.matrixWorld, this.matrix );
-
-			}
-
-			// update children
+			// make sure descendants are updated
 
 			if ( updateChildren === true ) {
 
@@ -5442,11 +5576,7 @@
 
 					const child = children[ i ];
 
-					if ( child.matrixWorldAutoUpdate === true ) {
-
-						child.updateWorldMatrix( false, true );
-
-					}
+					child.updateWorldMatrix( false, true );
 
 				}
 
@@ -5479,7 +5609,7 @@
 				};
 
 				output.metadata = {
-					version: 4.5,
+					version: 4.6,
 					type: 'Object',
 					generator: 'Object3D.toJSON'
 				};
@@ -5503,6 +5633,7 @@
 
 			object.layers = this.layers.mask;
 			object.matrix = this.matrix.toArray();
+			object.up = this.up.toArray();
 
 			if ( this.matrixAutoUpdate === false ) object.matrixAutoUpdate = false;
 
@@ -5514,6 +5645,58 @@
 				object.count = this.count;
 				object.instanceMatrix = this.instanceMatrix.toJSON();
 				if ( this.instanceColor !== null ) object.instanceColor = this.instanceColor.toJSON();
+
+			}
+
+			if ( this.isBatchedMesh ) {
+
+				object.type = 'BatchedMesh';
+				object.perObjectFrustumCulled = this.perObjectFrustumCulled;
+				object.sortObjects = this.sortObjects;
+
+				object.drawRanges = this._drawRanges;
+				object.reservedRanges = this._reservedRanges;
+
+				object.visibility = this._visibility;
+				object.active = this._active;
+				object.bounds = this._bounds.map( bound => ( {
+					boxInitialized: bound.boxInitialized,
+					boxMin: bound.box.min.toArray(),
+					boxMax: bound.box.max.toArray(),
+
+					sphereInitialized: bound.sphereInitialized,
+					sphereRadius: bound.sphere.radius,
+					sphereCenter: bound.sphere.center.toArray()
+				} ) );
+
+				object.maxInstanceCount = this._maxInstanceCount;
+				object.maxVertexCount = this._maxVertexCount;
+				object.maxIndexCount = this._maxIndexCount;
+
+				object.geometryInitialized = this._geometryInitialized;
+				object.geometryCount = this._geometryCount;
+
+				object.matricesTexture = this._matricesTexture.toJSON( meta );
+
+				if ( this._colorsTexture !== null ) object.colorsTexture = this._colorsTexture.toJSON( meta );
+
+				if ( this.boundingSphere !== null ) {
+
+					object.boundingSphere = {
+						center: object.boundingSphere.center.toArray(),
+						radius: object.boundingSphere.radius
+					};
+
+				}
+
+				if ( this.boundingBox !== null ) {
+
+					object.boundingBox = {
+						min: object.boundingBox.min.toArray(),
+						max: object.boundingBox.max.toArray()
+					};
+
+				}
 
 			}
 
@@ -5717,9 +5900,9 @@
 			this.matrixWorld.copy( source.matrixWorld );
 
 			this.matrixAutoUpdate = source.matrixAutoUpdate;
-			this.matrixWorldNeedsUpdate = source.matrixWorldNeedsUpdate;
 
 			this.matrixWorldAutoUpdate = source.matrixWorldAutoUpdate;
+			this.matrixWorldNeedsUpdate = source.matrixWorldNeedsUpdate;
 
 			this.layers.mask = source.layers.mask;
 			this.visible = source.visible;
@@ -5729,6 +5912,8 @@
 
 			this.frustumCulled = source.frustumCulled;
 			this.renderOrder = source.renderOrder;
+
+			this.animations = source.animations.slice();
 
 			this.userData = JSON.parse( JSON.stringify( source.userData ) );
 
@@ -5792,6 +5977,7 @@
 			this.type = 'BufferGeometry';
 
 			this.index = null;
+			this.indirect = null;
 			this.attributes = {};
 
 			this.morphAttributes = {};
@@ -5827,6 +6013,20 @@
 			}
 
 			return this;
+
+		}
+
+		setIndirect( indirect ) {
+
+			this.indirect = indirect;
+
+			return this;
+
+		}
+
+		getIndirect() {
+
+			return this.indirect;
 
 		}
 
@@ -6029,16 +6229,39 @@
 
 		setFromPoints( points ) {
 
-			const position = [];
+			const positionAttribute = this.getAttribute( 'position' );
 
-			for ( let i = 0, l = points.length; i < l; i ++ ) {
+			if ( positionAttribute === undefined ) {
 
-				const point = points[ i ];
-				position.push( point.x, point.y, point.z || 0 );
+				const position = [];
+
+				for ( let i = 0, l = points.length; i < l; i ++ ) {
+
+					const point = points[ i ];
+					position.push( point.x, point.y, point.z || 0 );
+
+				}
+
+				this.setAttribute( 'position', new Float32BufferAttribute( position, 3 ) );
+
+			} else {
+
+				for ( let i = 0, l = positionAttribute.count; i < l; i ++ ) {
+
+					const point = points[ i ];
+					positionAttribute.setXYZ( i, point.x, point.y, point.z || 0 );
+
+				}
+
+				if ( points.length > positionAttribute.count ) {
+
+					console.warn( 'THREE.BufferGeometry: Buffer size too small for points data. Use .dispose() and create a new geometry.' );
+
+				}
+
+				positionAttribute.needsUpdate = true;
 
 			}
-
-			this.setAttribute( 'position', new Float32BufferAttribute( position, 3 ) );
 
 			return this;
 
@@ -6057,7 +6280,7 @@
 
 			if ( position && position.isGLBufferAttribute ) {
 
-				console.error( 'THREE.BufferGeometry.computeBoundingBox(): GLBufferAttribute requires a manual bounding box. Alternatively set "mesh.frustumCulled" to "false".', this );
+				console.error( 'THREE.BufferGeometry.computeBoundingBox(): GLBufferAttribute requires a manual bounding box.', this );
 
 				this.boundingBox.set(
 					new Vector3( - Infinity, - Infinity, - Infinity ),
@@ -6127,7 +6350,7 @@
 
 			if ( position && position.isGLBufferAttribute ) {
 
-				console.error( 'THREE.BufferGeometry.computeBoundingSphere(): GLBufferAttribute requires a manual bounding sphere. Alternatively set "mesh.frustumCulled" to "false".', this );
+				console.error( 'THREE.BufferGeometry.computeBoundingSphere(): GLBufferAttribute requires a manual bounding sphere.', this );
 
 				this.boundingSphere.set( new Vector3(), Infinity );
 
@@ -6244,24 +6467,21 @@
 
 			}
 
-			const indices = index.array;
-			const positions = attributes.position.array;
-			const normals = attributes.normal.array;
-			const uvs = attributes.uv.array;
-
-			const nVertices = positions.length / 3;
+			const positionAttribute = attributes.position;
+			const normalAttribute = attributes.normal;
+			const uvAttribute = attributes.uv;
 
 			if ( this.hasAttribute( 'tangent' ) === false ) {
 
-				this.setAttribute( 'tangent', new BufferAttribute( new Float32Array( 4 * nVertices ), 4 ) );
+				this.setAttribute( 'tangent', new BufferAttribute( new Float32Array( 4 * positionAttribute.count ), 4 ) );
 
 			}
 
-			const tangents = this.getAttribute( 'tangent' ).array;
+			const tangentAttribute = this.getAttribute( 'tangent' );
 
 			const tan1 = [], tan2 = [];
 
-			for ( let i = 0; i < nVertices; i ++ ) {
+			for ( let i = 0; i < positionAttribute.count; i ++ ) {
 
 				tan1[ i ] = new Vector3();
 				tan2[ i ] = new Vector3();
@@ -6281,13 +6501,13 @@
 
 			function handleTriangle( a, b, c ) {
 
-				vA.fromArray( positions, a * 3 );
-				vB.fromArray( positions, b * 3 );
-				vC.fromArray( positions, c * 3 );
+				vA.fromBufferAttribute( positionAttribute, a );
+				vB.fromBufferAttribute( positionAttribute, b );
+				vC.fromBufferAttribute( positionAttribute, c );
 
-				uvA.fromArray( uvs, a * 2 );
-				uvB.fromArray( uvs, b * 2 );
-				uvC.fromArray( uvs, c * 2 );
+				uvA.fromBufferAttribute( uvAttribute, a );
+				uvB.fromBufferAttribute( uvAttribute, b );
+				uvC.fromBufferAttribute( uvAttribute, c );
 
 				vB.sub( vA );
 				vC.sub( vA );
@@ -6320,7 +6540,7 @@
 
 				groups = [ {
 					start: 0,
-					count: indices.length
+					count: index.count
 				} ];
 
 			}
@@ -6335,9 +6555,9 @@
 				for ( let j = start, jl = start + count; j < jl; j += 3 ) {
 
 					handleTriangle(
-						indices[ j + 0 ],
-						indices[ j + 1 ],
-						indices[ j + 2 ]
+						index.getX( j + 0 ),
+						index.getX( j + 1 ),
+						index.getX( j + 2 )
 					);
 
 				}
@@ -6349,7 +6569,7 @@
 
 			function handleVertex( v ) {
 
-				n.fromArray( normals, v * 3 );
+				n.fromBufferAttribute( normalAttribute, v );
 				n2.copy( n );
 
 				const t = tan1[ v ];
@@ -6365,10 +6585,7 @@
 				const test = tmp2.dot( tan2[ v ] );
 				const w = ( test < 0.0 ) ? - 1.0 : 1.0;
 
-				tangents[ v * 4 ] = tmp.x;
-				tangents[ v * 4 + 1 ] = tmp.y;
-				tangents[ v * 4 + 2 ] = tmp.z;
-				tangents[ v * 4 + 3 ] = w;
+				tangentAttribute.setXYZW( v, tmp.x, tmp.y, tmp.z, w );
 
 			}
 
@@ -6381,9 +6598,9 @@
 
 				for ( let j = start, jl = start + count; j < jl; j += 3 ) {
 
-					handleVertex( indices[ j + 0 ] );
-					handleVertex( indices[ j + 1 ] );
-					handleVertex( indices[ j + 2 ] );
+					handleVertex( index.getX( j + 0 ) );
+					handleVertex( index.getX( j + 1 ) );
+					handleVertex( index.getX( j + 2 ) );
 
 				}
 
@@ -6480,15 +6697,6 @@
 				normalAttribute.needsUpdate = true;
 
 			}
-
-		}
-
-		// @deprecated since r144
-
-		merge() {
-
-			console.error( 'THREE.BufferGeometry.merge() has been removed. Use THREE.BufferGeometryUtils.mergeBufferGeometries() instead.' );
-			return this;
 
 		}
 
@@ -6614,7 +6822,7 @@
 
 			const data = {
 				metadata: {
-					version: 4.5,
+					version: 4.6,
 					type: 'BufferGeometry',
 					generator: 'BufferGeometry.toJSON'
 				}
@@ -6850,6 +7058,7 @@
 	 * based on http://papervision3d.googlecode.com/svn/trunk/as3/trunk/src/org/papervision3d/objects/primitives/Plane.as
 	 */
 
+
 	class FlatTileGeometry extends BufferGeometry {
 
 		constructor ( width, height, clip, offsets, flatZ ) {
@@ -6947,6 +7156,7 @@
 	 *
 	 * based on http://papervision3d.googlecode.com/svn/trunk/as3/trunk/src/org/papervision3d/objects/primitives/Plane.as
 	 */
+
 
 	class TerrainTileGeometry extends BufferGeometry {
 
